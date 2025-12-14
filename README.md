@@ -1,22 +1,19 @@
-
 # 1️⃣🐝🏎️ The One Billion Row Challenge
 
-
 ---
+
 begin cmiller01 notes
 
 need to install java21, sdkman to reproduce some other results
 
 flow to run:
 
-  * create the measurements file `./create_measurements.sh 1000000 > measurements_1M.txt # up to 1B`
-  * update Java code (or other implementation)
-  * rebuild `./mnvw compile`
-  * run `./evaluate.sh cmiller01` # pick other usernames to try their implementations
+- create the measurements file `./create_measurements.sh 1000000 > measurements_1M.txt # up to 1B`
+- update Java code (or other implementation)
+- rebuild `./mnvw compile`
+- run `./evaluate.sh cmiller01` # pick other usernames to try their implementations
 
-
-end cmiller01 notes
----
+## end cmiller01 notes
 
 _Status Feb 4: The final leaderboards [have been published](https://www.morling.dev/blog/1brc-results-are-in/). Congrats to all the winners, and a big thank you to everyone participating in this challenge as well as to everyone helping to organize it!_
 
