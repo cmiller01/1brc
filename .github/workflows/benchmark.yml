@@ -53,6 +53,13 @@ jobs:
                   sdk use java 21.0.1-open
                   java --version
 
+            - name: Build Java project (needed for measurements generation)
+              shell: bash
+              run: |
+                  source "$HOME/.sdkman/bin/sdkman-init.sh"
+                  sdk use java 21.0.1-open
+                  ./mvnw clean compile
+
             - name: Cache measurements file
               id: cache-measurements
               uses: actions/cache@v4
@@ -62,7 +69,10 @@ jobs:
 
             - name: Generate measurements file if not cached
               if: steps.cache-measurements.outputs.cache-hit != 'true'
+              shell: bash
               run: |
+                  source "$HOME/.sdkman/bin/sdkman-init.sh"
+                  sdk use java 21.0.1-open
                   echo "Generating 10M measurements file..."
                   ./create_measurements.sh 10000000 > measurements_10M.txt
                   ls -lh measurements_10M.txt
