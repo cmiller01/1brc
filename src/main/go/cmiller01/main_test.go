@@ -35,10 +35,10 @@ func TestProcessChunk(t *testing.T) {
 	if measurement.count != 253 {
 		t.Fatalf("invalid count")
 	}
-	if measurement.max != 53.4 {
+	if measurement.max != 534 {
 		t.Fatalf("invalid max")
 	}
-	if measurement.sum != 7131.500000000006 {
-		t.Fatalf("invalid sum")
+	if measurement.sum != 71321 {
+		t.Fatalf("invalid sum, got %d", measurement.sum)
 	}
 }

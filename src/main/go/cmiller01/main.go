@@ -12,10 +12,10 @@ import (
 )
 
 type measurements struct {
-	min   float64
-	max   float64
+	min   int64
+	max   int64
 	count int
-	sum   float64
+	sum   int64
 }
 
 const (
@@ -68,14 +68,20 @@ func processChunk(chunk []byte, results map[string]*measurements) {
 	}
 }
 
+// parseTemp takes the value like 12.4 and converts it into 124 so we work with integers, not floats
+func parseTemp(temp []byte) int64 {
+	tempS := bytes.SplitN(temp, []byte("."), 2)
+	whole, _ := strconv.Atoi(string(tempS[0]))
+	whole *= 10
+	frac, _ := strconv.Atoi(string(tempS[1]))
+	return int64(whole + frac)
+}
+
 func processLine(line []byte, results map[string]*measurements) {
 	city, temp, _ := bytes.Cut(line, separator)
 	cityS := string(city)
 	// turn the temp into a number
-	tempVal, err := strconv.ParseFloat(string(temp), 64)
-	if err != nil {
-		log.Fatalf("couldn't parse number, line: %s", line)
-	}
+	tempVal := parseTemp(temp)
 	m, ok := results[cityS]
 	if !ok {
 		results[cityS] = &measurements{
@@ -109,9 +115,9 @@ func formatResults(results map[string]*measurements) {
 	fmt.Print("{")
 	for idx, city := range cities {
 		if idx == len(cities)-1 {
-			fmt.Printf("%s=%.1f/%.1f/%.1f", city, results[city].min, round(results[city].sum/float64(results[city].count)), results[city].max)
+			fmt.Printf("%s=%.1f/%.1f/%.1f", city, float64(results[city].min)/10.0, round(float64(results[city].sum)/float64(results[city].count)), float64(results[city].max)/10.0)
 		} else {
-			fmt.Printf(outputFormat, city, results[city].min, round(results[city].sum/float64(results[city].count)), results[city].max)
+			fmt.Printf(outputFormat, city, float64(results[city].min)/10.0, round(float64(results[city].sum)/float64(results[city].count)), float64(results[city].max)/10.0)
 		}
 	}
 	fmt.Println("}")
