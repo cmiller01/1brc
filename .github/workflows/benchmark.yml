@@ -64,8 +64,8 @@ jobs:
               id: cache-measurements
               uses: actions/cache@v4
               with:
-                  path: measurements_10M.txt
-                  key: measurements-10M-${{ hashFiles('create_measurements.sh') }}
+                  path: measurements.txt
+                  key: measurements-${{ hashFiles('create_measurements.sh') }}
 
             - name: Generate measurements file if not cached
               if: steps.cache-measurements.outputs.cache-hit != 'true'
@@ -73,8 +73,8 @@ jobs:
               run: |
                   source "$HOME/.sdkman/bin/sdkman-init.sh"
                   sdk use java 21.0.1-open
-                  echo "Generating 10M measurements file..."
-                  ./create_measurements.sh 10000000
+                  echo "Generating 50M measurements file..."
+                  ./create_measurements.sh 50000000
 
             - name: Build PR branch
               run: |
@@ -201,7 +201,7 @@ jobs:
 
                       ${statusMessage}
 
-                      ### Detailed Results (10M rows, averaged over 3 runs)
+                      ### Detailed Results (50M rows, averaged over 3 runs)
 
                       | Branch | Average Time | 
                       |--------|--------------|
@@ -248,4 +248,4 @@ jobs:
                   echo "" >> $GITHUB_STEP_SUMMARY
                   echo "✅ Tests passed on ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "**Average runtime (10M rows, 3 runs):** ${{ env.PR_BRANCH_TIME }}s" >> $GITHUB_STEP_SUMMARY
+                  echo "**Average runtime (50M rows, 3 runs):** ${{ env.PR_BRANCH_TIME }}s" >> $GITHUB_STEP_SUMMARY
