@@ -41,21 +41,62 @@ func main() {
 	}
 	results := make(map[string]*measurements, 10_000)
 
-	// // start rolling through the file!
-	// f, err := os.Open("measurements.txt")
-	// if err != nil {
-	// 	log.Fatal("could not open file to read\n", err)
-	// }
-	// defer f.Close()
-	// scanner := bufio.NewScanner(f)
-
 	// what if we just read the whole file into memory?!
 	contents, err := os.ReadFile("measurements.txt")
 	if err != nil {
 		log.Fatal("could not read file\n", err)
 	}
 	processChunk(contents, results)
+	formatResults(results)
 
+}
+
+func processChunk(chunk []byte, results map[string]*measurements) {
+	start := 0
+	for i := range len(chunk) {
+		if chunk[i] == '\n' {
+			// Process line from start to i (exclusive)
+			if i > start {
+				processLine(chunk[start:i], results)
+			}
+			start = i + 1
+		}
+	}
+	// Process last line if file doesn't end with newline
+	if start < len(chunk) {
+		processLine(chunk[start:], results)
+	}
+}
+
+func processLine(line []byte, results map[string]*measurements) {
+	city, temp, _ := bytes.Cut(line, separator)
+	cityS := string(city)
+	// turn the temp into a number
+	tempVal, err := strconv.ParseFloat(string(temp), 64)
+	if err != nil {
+		log.Fatalf("couldn't parse number, line: %s", line)
+	}
+	m, ok := results[cityS]
+	if !ok {
+		results[cityS] = &measurements{
+			min:   tempVal,
+			max:   tempVal,
+			sum:   tempVal,
+			count: 1,
+		}
+	} else {
+		if tempVal < m.min {
+			m.min = tempVal
+		}
+		if tempVal > m.max {
+			m.max = tempVal
+		}
+		m.sum += tempVal
+		m.count++
+	}
+}
+
+func formatResults(results map[string]*measurements) {
 	// just iterate and print, will need to format correctly
 	// we need to sort the cities
 	cities := make([]string, len(results))
@@ -74,36 +115,7 @@ func main() {
 		}
 	}
 	fmt.Println("}")
-}
 
-func processChunk(chunk []byte, results map[string]*measurements) {
-	for line := range bytes.Lines(chunk) {
-		city, temp, _ := bytes.Cut(line, separator)
-		cityS := string(city)
-		// turn the temp into a number
-		tempVal, err := strconv.ParseFloat(string(temp[0:len(temp)-1]), 64)
-		if err != nil {
-			log.Fatalf("couldn't parse number city %s tempval %s, error %v", city, temp, err)
-		}
-		m, ok := results[cityS]
-		if !ok {
-			results[cityS] = &measurements{
-				min:   tempVal,
-				max:   tempVal,
-				sum:   tempVal,
-				count: 1,
-			}
-		} else {
-			if tempVal < m.min {
-				m.min = tempVal
-			}
-			if tempVal > m.max {
-				m.max = tempVal
-			}
-			m.sum += tempVal
-			m.count++
-		}
-	}
 }
 
 func round(x float64) float64 {

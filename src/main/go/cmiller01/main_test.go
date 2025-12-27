@@ -23,3 +23,22 @@ func BenchmarkProcessChunk(b *testing.B) {
 		processChunk(measurementsBench, results)
 	}
 }
+
+func TestProcessChunk(t *testing.T) {
+	results := make(map[string]*measurements, 10_000)
+	processChunk(measurementsBench, results)
+	// spot check one
+	measurement := results["Juba"]
+	if measurement == nil {
+		t.Fatalf("expected measurement not to be nil")
+	}
+	if measurement.count != 253 {
+		t.Fatalf("invalid count")
+	}
+	if measurement.max != 53.4 {
+		t.Fatalf("invalid max")
+	}
+	if measurement.sum != 7131.500000000006 {
+		t.Fatalf("invalid sum")
+	}
+}
