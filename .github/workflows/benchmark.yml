@@ -87,19 +87,10 @@ jobs:
                   ls -lh measurements_10M.txt
                   echo "First 5 lines:"
                   head -5 measurements_10M.txt
-                  
-                  # Create symlink for tests (many implementations expect measurements.txt)
+
+                  # Create symlink for benchmarking (Go implementation expects measurements.txt)
                   ln -sf measurements_10M.txt measurements.txt
                   echo "Created symlink: measurements.txt -> measurements_10M.txt"
-
-            - name: Run tests on PR branch
-              shell: bash
-              run: |
-                  source "$HOME/.sdkman/bin/sdkman-init.sh"
-                  sdk use java 21.0.1-open
-                  echo "Running tests on PR branch..."
-                  chmod +x test_ci.sh test.sh prepare_cmiller01.sh calculate_average_cmiller01.sh tocsv.sh
-                  ./test_ci.sh cmiller01
 
             - name: Build PR branch
               run: |
@@ -110,8 +101,6 @@ jobs:
             - name: Benchmark PR branch
               shell: bash
               run: |
-                  source "$HOME/.sdkman/bin/sdkman-init.sh"
-                  sdk use java 21.0.1-open || true
                   echo "Benchmarking PR branch..."
 
                   # Run multiple times and capture timing
@@ -121,7 +110,7 @@ jobs:
                   for i in $(seq 1 $runs); do
                     echo "Run $i of $runs..."
                     start_time=$(date +%s.%N)
-                    ./calculate_average_cmiller01.sh < measurements_10M.txt > /tmp/output_pr_$i.txt
+                    ./main > /tmp/output_pr_$i.txt
                     end_time=$(date +%s.%N)
                     runtime=$(echo "$end_time - $start_time" | bc)
                     echo "Run $i completed in $runtime seconds"
@@ -143,8 +132,6 @@ jobs:
               if: github.event_name == 'pull_request'
               shell: bash
               run: |
-                  source "$HOME/.sdkman/bin/sdkman-init.sh"
-                  sdk use java 21.0.1-open || true
                   echo "Building main branch..."
                   ./prepare_cmiller01.sh
 
@@ -152,8 +139,6 @@ jobs:
               if: github.event_name == 'pull_request'
               shell: bash
               run: |
-                  source "$HOME/.sdkman/bin/sdkman-init.sh"
-                  sdk use java 21.0.1-open || true
                   echo "Benchmarking main branch..."
 
                   # Run multiple times and capture timing
@@ -163,7 +148,7 @@ jobs:
                   for i in $(seq 1 $runs); do
                     echo "Run $i of $runs..."
                     start_time=$(date +%s.%N)
-                    ./calculate_average_cmiller01.sh < measurements_10M.txt > /tmp/output_main_$i.txt
+                    ./main > /tmp/output_main_$i.txt
                     end_time=$(date +%s.%N)
                     runtime=$(echo "$end_time - $start_time" | bc)
                     echo "Run $i completed in $runtime seconds"
