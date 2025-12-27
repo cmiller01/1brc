@@ -87,6 +87,10 @@ jobs:
                   ls -lh measurements_10M.txt
                   echo "First 5 lines:"
                   head -5 measurements_10M.txt
+                  
+                  # Create symlink for tests (many implementations expect measurements.txt)
+                  ln -sf measurements_10M.txt measurements.txt
+                  echo "Created symlink: measurements.txt -> measurements_10M.txt"
 
             - name: Run tests on PR branch
               shell: bash
