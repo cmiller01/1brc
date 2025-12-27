@@ -54,17 +54,23 @@ func BenchmarkParseTemp(b *testing.B) {
 }
 
 func BenchmarkProcessChunk(b *testing.B) {
-	results := make(map[string]*measurements, 10_000)
+	results := make(map[uint64]*measurements, 10_000)
 	for b.Loop() {
 		processChunk(measurementsBench, results)
 	}
 }
 
 func TestProcessChunk(t *testing.T) {
-	results := make(map[string]*measurements, 10_000)
+	results := make(map[uint64]*measurements, 10_000)
 	processChunk(measurementsBench, results)
-	// spot check one
-	measurement := results["Juba"]
+	// spot check one - need to find Juba by iterating
+	var measurement *measurements
+	for _, m := range results {
+		if m.city == "Juba" {
+			measurement = m
+			break
+		}
+	}
 	if measurement == nil {
 		t.Fatalf("expected measurement not to be nil")
 	}
