@@ -18,6 +18,14 @@ type measurements struct {
 	sum   float64
 }
 
+const (
+	scale2 float64 = 100
+	scale1 float64 = 10
+
+	// format string for _most_ of the output
+	outputFormat string = "%s=%.1f/%.1f/%.1f, "
+)
+
 func main() {
 	// simplest (but hopefully memory efficient) implementation
 
@@ -73,22 +81,17 @@ func main() {
 	sort.Strings(cities)
 	fmt.Print("{")
 	for idx, city := range cities {
-		formatter := "%s=%.1f/%.1f/%.1f, "
 		if idx == len(cities)-1 {
-			formatter = "%s=%.1f/%.1f/%.1f"
+			fmt.Printf("%s=%.1f/%.1f/%.1f", city, results[city].min, round(results[city].sum/float64(results[city].count)), results[city].max)
+		} else {
+			fmt.Printf(outputFormat, city, results[city].min, round(results[city].sum/float64(results[city].count)), results[city].max)
 		}
-		if os.Getenv("DEBUG") != "" {
-			fmt.Fprintf(os.Stderr, "DEBUG %s %#v", city, results[city])
-		}
-		fmt.Printf(formatter, city, float64(results[city].min), round(results[city].sum/float64(results[city].count)), float64(results[city].max))
 	}
 	fmt.Println("}")
 }
 
 func round(x float64) float64 {
 	// TODO: this is a bit yikes, it's surely going to be a bit slow
-	scale := math.Pow(10, float64(2))
-	intermediate := math.Round(x*scale) / scale
-	scale = math.Pow(10, float64(1))
-	return math.Round(intermediate*scale) / scale
+	intermediate := math.Round(x*scale2) / scale2
+	return math.Round(intermediate*scale1) / scale1
 }
