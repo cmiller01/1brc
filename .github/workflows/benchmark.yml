@@ -1,0 +1,268 @@
+name: Performance Benchmark
+
+on:
+    pull_request:
+        branches: [main]
+        paths:
+            - "src/main/go/cmiller01/**"
+            - "calculate_average_cmiller01.sh"
+            - "prepare_cmiller01.sh"
+            - ".github/workflows/benchmark.yml"
+    push:
+        branches: [main]
+        paths:
+            - "src/main/go/cmiller01/**"
+            - "calculate_average_cmiller01.sh"
+            - "prepare_cmiller01.sh"
+    workflow_dispatch: {}
+
+jobs:
+    test-and-benchmark:
+        runs-on: ubuntu-latest
+        permissions:
+            pull-requests: write
+            contents: read
+
+        steps:
+            - name: Checkout PR branch
+              uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+
+            - name: Set up Go
+              uses: actions/setup-go@v6
+              with:
+                  go-version: "1.25"
+
+            - name: Cache SDKMan
+              id: cache-sdkman
+              uses: actions/cache@v4
+              with:
+                  path: ~/.sdkman
+                  key: ${{ runner.os }}-sdkman
+
+            - name: Setup SDKMAN
+              uses: sdkman/sdkman-action@b1f9b696c79148b66d3d3a06f7ea801820318d0f
+              id: sdkman
+
+            - name: Install Java via SDKMan
+              shell: bash
+              run: |
+                  source "$HOME/.sdkman/bin/sdkman-init.sh"
+                  sdk install java 21.0.1-open || true
+                  sdk use java 21.0.1-open
+                  java --version
+
+            - name: Cache measurements file
+              id: cache-measurements
+              uses: actions/cache@v4
+              with:
+                  path: measurements_10M.txt
+                  key: measurements-10M-${{ hashFiles('create_measurements.sh') }}
+
+            - name: Generate measurements file if not cached
+              if: steps.cache-measurements.outputs.cache-hit != 'true'
+              run: |
+                  echo "Generating 10M measurements file..."
+                  ./create_measurements.sh 10000000 > measurements_10M.txt
+                  ls -lh measurements_10M.txt
+
+            - name: Verify measurements file
+              run: |
+                  if [ ! -f measurements_10M.txt ]; then
+                    echo "Error: measurements_10M.txt not found"
+                    exit 1
+                  fi
+                  echo "Measurements file size:"
+                  ls -lh measurements_10M.txt
+                  echo "First 5 lines:"
+                  head -5 measurements_10M.txt
+
+            - name: Run tests on PR branch
+              shell: bash
+              run: |
+                  source "$HOME/.sdkman/bin/sdkman-init.sh"
+                  sdk use java 21.0.1-open
+                  echo "Running tests on PR branch..."
+                  chmod +x test_ci.sh test.sh prepare_cmiller01.sh calculate_average_cmiller01.sh tocsv.sh
+                  ./test_ci.sh cmiller01
+
+            - name: Build PR branch
+              run: |
+                  echo "Building PR branch..."
+                  chmod +x prepare_cmiller01.sh
+                  ./prepare_cmiller01.sh
+
+            - name: Benchmark PR branch
+              shell: bash
+              run: |
+                  source "$HOME/.sdkman/bin/sdkman-init.sh"
+                  sdk use java 21.0.1-open || true
+                  echo "Benchmarking PR branch..."
+
+                  # Run multiple times and capture timing
+                  total_time=0
+                  runs=3
+
+                  for i in $(seq 1 $runs); do
+                    echo "Run $i of $runs..."
+                    start_time=$(date +%s.%N)
+                    ./calculate_average_cmiller01.sh < measurements_10M.txt > /tmp/output_pr_$i.txt
+                    end_time=$(date +%s.%N)
+                    runtime=$(echo "$end_time - $start_time" | bc)
+                    echo "Run $i completed in $runtime seconds"
+                    total_time=$(echo "$total_time + $runtime" | bc)
+                  done
+
+                  avg_time=$(echo "scale=3; $total_time / $runs" | bc)
+                  echo "PR_BRANCH_TIME=$avg_time" >> $GITHUB_ENV
+                  echo "Average time for PR branch: $avg_time seconds"
+
+            - name: Checkout main branch
+              if: github.event_name == 'pull_request'
+              shell: bash
+              run: |
+                  git fetch origin main:main || git fetch origin master:master || true
+                  git checkout main || git checkout master
+
+            - name: Build main branch
+              if: github.event_name == 'pull_request'
+              shell: bash
+              run: |
+                  source "$HOME/.sdkman/bin/sdkman-init.sh"
+                  sdk use java 21.0.1-open || true
+                  echo "Building main branch..."
+                  ./prepare_cmiller01.sh
+
+            - name: Benchmark main branch
+              if: github.event_name == 'pull_request'
+              shell: bash
+              run: |
+                  source "$HOME/.sdkman/bin/sdkman-init.sh"
+                  sdk use java 21.0.1-open || true
+                  echo "Benchmarking main branch..."
+
+                  # Run multiple times and capture timing
+                  total_time=0
+                  runs=3
+
+                  for i in $(seq 1 $runs); do
+                    echo "Run $i of $runs..."
+                    start_time=$(date +%s.%N)
+                    ./calculate_average_cmiller01.sh < measurements_10M.txt > /tmp/output_main_$i.txt
+                    end_time=$(date +%s.%N)
+                    runtime=$(echo "$end_time - $start_time" | bc)
+                    echo "Run $i completed in $runtime seconds"
+                    total_time=$(echo "$total_time + $runtime" | bc)
+                  done
+
+                  avg_time=$(echo "scale=3; $total_time / $runs" | bc)
+                  echo "MAIN_BRANCH_TIME=$avg_time" >> $GITHUB_ENV
+                  echo "Average time for main branch: $avg_time seconds"
+
+            - name: Calculate performance difference
+              if: github.event_name == 'pull_request'
+              id: perf-diff
+              run: |
+                  pr_time=${{ env.PR_BRANCH_TIME }}
+                  main_time=${{ env.MAIN_BRANCH_TIME }}
+
+                  echo "PR branch: $pr_time seconds"
+                  echo "Main branch: $main_time seconds"
+
+                  # Calculate difference and percentage
+                  diff=$(echo "scale=3; $main_time - $pr_time" | bc)
+                  percent=$(echo "scale=2; ($diff / $main_time) * 100" | bc)
+
+                  echo "DIFF_SECONDS=$diff" >> $GITHUB_ENV
+                  echo "DIFF_PERCENT=$percent" >> $GITHUB_ENV
+
+                  # Determine if it's an improvement or regression
+                  if (( $(echo "$diff > 0" | bc -l) )); then
+                    echo "STATUS=improved" >> $GITHUB_ENV
+                    echo "EMOJI=🚀" >> $GITHUB_ENV
+                  elif (( $(echo "$diff < 0" | bc -l) )); then
+                    echo "STATUS=regressed" >> $GITHUB_ENV
+                    echo "EMOJI=⚠️" >> $GITHUB_ENV
+                  else
+                    echo "STATUS=unchanged" >> $GITHUB_ENV
+                    echo "EMOJI=➡️" >> $GITHUB_ENV
+                  fi
+
+            - name: Comment on PR
+              if: github.event_name == 'pull_request'
+              uses: actions/github-script@v7
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const prTime = parseFloat('${{ env.PR_BRANCH_TIME }}');
+                      const mainTime = parseFloat('${{ env.MAIN_BRANCH_TIME }}');
+                      const diff = parseFloat('${{ env.DIFF_SECONDS }}');
+                      const percent = parseFloat('${{ env.DIFF_PERCENT }}');
+                      const status = '${{ env.STATUS }}';
+                      const emoji = '${{ env.EMOJI }}';
+
+                      let statusMessage;
+                      let diffDisplay = Math.abs(diff).toFixed(3);
+                      let percentDisplay = Math.abs(percent).toFixed(2);
+
+                      if (status === 'improved') {
+                        statusMessage = `${emoji} **Performance Improved!** This PR is **${percentDisplay}% faster** than main.`;
+                      } else if (status === 'regressed') {
+                        statusMessage = `${emoji} **Performance Regression** This PR is **${percentDisplay}% slower** than main.`;
+                      } else {
+                        statusMessage = `${emoji} **No Performance Change** Performance is the same as main.`;
+                      }
+
+                      const comment = `## Performance Benchmark Results
+
+                      ${statusMessage}
+
+                      ### Detailed Results (10M rows, averaged over 3 runs)
+
+                      | Branch | Average Time | 
+                      |--------|--------------|
+                      | 🔵 PR Branch | ${prTime.toFixed(3)}s |
+                      | 🟢 Main Branch | ${mainTime.toFixed(3)}s |
+                      | **Difference** | **${diff >= 0 ? '+' : ''}${diffDisplay}s (${percent >= 0 ? '+' : ''}${percentDisplay}%)** |
+
+                      <details>
+                      <summary>How to interpret these results</summary>
+
+                      - Positive difference = PR is faster (improvement) 🚀
+                      - Negative difference = PR is slower (regression) ⚠️
+                      - Tests run on GitHub Actions runners (ubuntu-latest)
+                      - Each result is averaged over 3 runs
+                      - Test dataset: 10 million rows
+
+                      </details>
+                      `;
+
+                      github.rest.issues.createComment({
+                        issue_number: context.issue.number,
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        body: comment
+                      });
+
+            - name: Summary
+              if: github.event_name == 'pull_request'
+              run: |
+                  echo "## Performance Benchmark Summary" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "${{ env.EMOJI }} **Status:** ${{ env.STATUS }}" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "| Branch | Time |" >> $GITHUB_STEP_SUMMARY
+                  echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+                  echo "| PR | ${{ env.PR_BRANCH_TIME }}s |" >> $GITHUB_STEP_SUMMARY
+                  echo "| Main | ${{ env.MAIN_BRANCH_TIME }}s |" >> $GITHUB_STEP_SUMMARY
+                  echo "| **Difference** | **${{ env.DIFF_SECONDS }}s (${{ env.DIFF_PERCENT }}%)** |" >> $GITHUB_STEP_SUMMARY
+
+            - name: Push branch summary
+              if: github.event_name == 'push'
+              run: |
+                  echo "## Performance Benchmark Summary" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "✅ Tests passed on ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**Average runtime (10M rows, 3 runs):** ${{ env.PR_BRANCH_TIME }}s" >> $GITHUB_STEP_SUMMARY
