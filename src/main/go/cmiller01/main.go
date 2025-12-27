@@ -1,18 +1,18 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"fmt"
 	"log"
 	"math"
 	"os"
+	"runtime/pprof"
 	"sort"
 	"strconv"
-	"strings"
 )
 
 type measurements struct {
-	min   float64 // min, max and sum are all 10x
+	min   float64
 	max   float64
 	count int
 	sum   float64
@@ -26,50 +26,36 @@ const (
 	outputFormat string = "%s=%.1f/%.1f/%.1f, "
 )
 
+var separator []byte = []byte(";")
+
 func main() {
-	// simplest (but hopefully memory efficient) implementation
-
-	// initialize a map, we know a max of 10K stations
 	// TOOD: use pointer?
-	results := make(map[string]measurements, 10_000)
-
-	// start rolling through the file!
-	f, err := os.Open("measurements.txt")
-	if err != nil {
-		log.Fatal("could not open file to read\n", err)
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	sep := ";"
-	for scanner.Scan() {
-		// parse the line
-		// TODO: are bytes really better
-		city, temp, _ := strings.Cut(scanner.Text(), sep)
-		m := results[city]
-		// turn the temp into a number
-		tempVal, err := strconv.ParseFloat(temp, 64)
+	if os.Getenv("PROFILE") != "" {
+		f, err := os.Create("cpu.profile")
 		if err != nil {
-			log.Fatalf("couldn't parse number city %s tempval %s, error %v", city, temp, err)
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
 		}
-		if m.count == 0 {
-			m.min = tempVal
-			m.max = tempVal
-		} else {
-			// TODO: is this slow?
-			if tempVal < m.min {
-				m.min = tempVal
-			}
-			if tempVal > m.max {
-				m.max = tempVal
-			}
-		}
-		m.sum += tempVal
-		m.count++
-		results[city] = m
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("unexpected error on scanning: %v", err)
+	results := make(map[string]*measurements, 10_000)
+
+	// // start rolling through the file!
+	// f, err := os.Open("measurements.txt")
+	// if err != nil {
+	// 	log.Fatal("could not open file to read\n", err)
+	// }
+	// defer f.Close()
+	// scanner := bufio.NewScanner(f)
+
+	// what if we just read the whole file into memory?!
+	contents, err := os.ReadFile("measurements.txt")
+	if err != nil {
+		log.Fatal("could not read file\n", err)
 	}
+	processChunk(contents, results)
+
 	// just iterate and print, will need to format correctly
 	// we need to sort the cities
 	cities := make([]string, len(results))
@@ -88,6 +74,36 @@ func main() {
 		}
 	}
 	fmt.Println("}")
+}
+
+func processChunk(chunk []byte, results map[string]*measurements) {
+	for line := range bytes.Lines(chunk) {
+		city, temp, _ := bytes.Cut(line, separator)
+		cityS := string(city)
+		// turn the temp into a number
+		tempVal, err := strconv.ParseFloat(string(temp[0:len(temp)-1]), 64)
+		if err != nil {
+			log.Fatalf("couldn't parse number city %s tempval %s, error %v", city, temp, err)
+		}
+		m, ok := results[cityS]
+		if !ok {
+			results[cityS] = &measurements{
+				min:   tempVal,
+				max:   tempVal,
+				sum:   tempVal,
+				count: 1,
+			}
+		} else {
+			if tempVal < m.min {
+				m.min = tempVal
+			}
+			if tempVal > m.max {
+				m.max = tempVal
+			}
+			m.sum += tempVal
+			m.count++
+		}
+	}
 }
 
 func round(x float64) float64 {
