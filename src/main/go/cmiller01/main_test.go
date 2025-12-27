@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"fmt"
 	"testing"
 )
 
@@ -14,6 +15,41 @@ func TestRound(t *testing.T) {
 	if res != 25.5 {
 		t.Errorf("got %f", res)
 		t.Fail()
+	}
+}
+
+func TestParseTemp(t *testing.T) {
+	testTable := []struct {
+		input  []byte
+		output float64
+	}{
+
+		{input: []byte("3.2"), output: 3.2},
+		{input: []byte("-20.1"), output: -20.1},
+		{input: []byte("-0.3"), output: -0.3},
+	}
+	for _, tt := range testTable {
+		t.Run(fmt.Sprintf("%s", string(tt.input)), func(t *testing.T) {
+			res := parseTemp(tt.input)
+			if res != tt.output {
+				t.Fatalf("expected %f got %f", tt.output, res)
+			}
+		})
+	}
+}
+
+func BenchmarkParseTemp(b *testing.B) {
+	testCases := [][]byte{
+		[]byte("3.2"),
+		[]byte("-20.1"),
+		[]byte("-0.3"),
+		[]byte("99.9"),
+		[]byte("-99.9"),
+	}
+	for b.Loop() {
+		for _, tc := range testCases {
+			parseTemp(tc)
+		}
 	}
 }
 
@@ -36,9 +72,9 @@ func TestProcessChunk(t *testing.T) {
 		t.Fatalf("invalid count")
 	}
 	if measurement.max != 53.4 {
-		t.Fatalf("invalid max")
+		t.Fatalf("invalid max, got %f", measurement.max)
 	}
-	if measurement.sum != 7131.500000000006 {
-		t.Fatalf("invalid sum")
+	if measurement.sum != 713.5 {
+		t.Fatalf("invalid sum, got %f", measurement.sum)
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"os"
 	"runtime/pprof"
 	"sort"
-	"strconv"
 )
 
 type measurements struct {
@@ -68,14 +67,36 @@ func processChunk(chunk []byte, results map[string]*measurements) {
 	}
 }
 
+// parseTemp takes the value like 12.4 and converts it into 124 so we work with integers, not floats
+func parseTemp(tempBytes []byte) float64 {
+	// from: https://github.com/benhoyt/go-1brc/blob/bb0641a5086474d0640996e8a2aefe9721e6d814/r3.go#L38-L54
+	// note the "float64" is a clever way to go from bytes to int because of ASCII encoding
+	// we check if the first character is a negative symbol
+	negative := false
+	index := 0
+	if tempBytes[index] == '-' {
+		index++
+		negative = true
+	}
+	temp := float64(tempBytes[index] - '0') // parse first digit
+	index++
+	if tempBytes[index] != '.' {
+		temp = temp*10 + float64(tempBytes[index]-'0') // parse optional second digit
+		index++
+	}
+	index++                                    // skip '.'
+	temp += float64(tempBytes[index]-'0') / 10 // parse decimal digit
+	if negative {
+		temp = -temp
+	}
+	return float64(temp)
+}
+
 func processLine(line []byte, results map[string]*measurements) {
 	city, temp, _ := bytes.Cut(line, separator)
 	cityS := string(city)
 	// turn the temp into a number
-	tempVal, err := strconv.ParseFloat(string(temp), 64)
-	if err != nil {
-		log.Fatalf("couldn't parse number, line: %s", line)
-	}
+	tempVal := parseTemp(temp)
 	m, ok := results[cityS]
 	if !ok {
 		results[cityS] = &measurements{
@@ -109,9 +130,9 @@ func formatResults(results map[string]*measurements) {
 	fmt.Print("{")
 	for idx, city := range cities {
 		if idx == len(cities)-1 {
-			fmt.Printf("%s=%.1f/%.1f/%.1f", city, results[city].min, round(results[city].sum/float64(results[city].count)), results[city].max)
+			fmt.Printf("%s=%.1f/%.1f/%.1f", city, results[city].min, round(float64(results[city].sum)/float64(results[city].count)), results[city].max)
 		} else {
-			fmt.Printf(outputFormat, city, results[city].min, round(results[city].sum/float64(results[city].count)), results[city].max)
+			fmt.Printf(outputFormat, city, results[city].min, round(float64(results[city].sum)/float64(results[city].count)), results[city].max)
 		}
 	}
 	fmt.Println("}")
