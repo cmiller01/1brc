@@ -74,23 +74,7 @@ jobs:
                   source "$HOME/.sdkman/bin/sdkman-init.sh"
                   sdk use java 21.0.1-open
                   echo "Generating 10M measurements file..."
-                  ./create_measurements.sh 10000000 > measurements_10M.txt
-                  ls -lh measurements_10M.txt
-
-            - name: Verify measurements file
-              run: |
-                  if [ ! -f measurements_10M.txt ]; then
-                    echo "Error: measurements_10M.txt not found"
-                    exit 1
-                  fi
-                  echo "Measurements file size:"
-                  ls -lh measurements_10M.txt
-                  echo "First 5 lines:"
-                  head -5 measurements_10M.txt
-
-                  # Create symlink for benchmarking (Go implementation expects measurements.txt)
-                  ln -sf measurements_10M.txt measurements.txt
-                  echo "Created symlink: measurements.txt -> measurements_10M.txt"
+                  ./create_measurements.sh 10000000
 
             - name: Build PR branch
               run: |
