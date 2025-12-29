@@ -11,6 +11,7 @@ import (
 )
 
 type measurements struct {
+	city  string
 	min   float64
 	max   float64
 	count int
@@ -38,7 +39,7 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-	results := make(map[string]*measurements, 10_000)
+	results := make(map[uint64]*measurements, 10_000)
 
 	// what if we just read the whole file into memory?!
 	contents, err := os.ReadFile("measurements.txt")
@@ -50,7 +51,7 @@ func main() {
 
 }
 
-func processChunk(chunk []byte, results map[string]*measurements) {
+func processChunk(chunk []byte, results map[uint64]*measurements) {
 	start := 0
 	for i := range len(chunk) {
 		if chunk[i] == '\n' {
@@ -92,14 +93,23 @@ func parseTemp(tempBytes []byte) float64 {
 	return float64(temp)
 }
 
-func processLine(line []byte, results map[string]*measurements) {
+func hashString(s []byte) uint64 {
+	var h uint64 = 0
+	for _, b := range s {
+		h = h*31 + uint64(b)
+	}
+	return h
+}
+
+func processLine(line []byte, results map[uint64]*measurements) {
 	city, temp, _ := bytes.Cut(line, separator)
-	cityS := string(city)
 	// turn the temp into a number
 	tempVal := parseTemp(temp)
-	m, ok := results[cityS]
+	hash := hashString(city)
+	m, ok := results[hash]
 	if !ok {
-		results[cityS] = &measurements{
+		results[hash] = &measurements{
+			city:  string(city),
 			min:   tempVal,
 			max:   tempVal,
 			sum:   tempVal,
@@ -117,22 +127,28 @@ func processLine(line []byte, results map[string]*measurements) {
 	}
 }
 
-func formatResults(results map[string]*measurements) {
+func formatResults(results map[uint64]*measurements) {
 	// just iterate and print, will need to format correctly
 	// we need to sort the cities
-	cities := make([]string, len(results))
-	idx := 0
-	for city := range results {
-		cities[idx] = city
-		idx++
+	cities := make([]string, 0, len(results))
+	for _, m := range results {
+		cities = append(cities, m.city)
 	}
 	sort.Strings(cities)
+
+	// Create a reverse lookup from city name to measurement
+	cityToMeasurement := make(map[string]*measurements, len(results))
+	for _, m := range results {
+		cityToMeasurement[m.city] = m
+	}
+
 	fmt.Print("{")
 	for idx, city := range cities {
+		m := cityToMeasurement[city]
 		if idx == len(cities)-1 {
-			fmt.Printf("%s=%.1f/%.1f/%.1f", city, results[city].min, round(float64(results[city].sum)/float64(results[city].count)), results[city].max)
+			fmt.Printf("%s=%.1f/%.1f/%.1f", city, m.min, round(float64(m.sum)/float64(m.count)), m.max)
 		} else {
-			fmt.Printf(outputFormat, city, results[city].min, round(float64(results[city].sum)/float64(results[city].count)), results[city].max)
+			fmt.Printf(outputFormat, city, m.min, round(float64(m.sum)/float64(m.count)), m.max)
 		}
 	}
 	fmt.Println("}")
